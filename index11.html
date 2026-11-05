@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COACH</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* layout: phone column, bottom tab bar — Еда / Зал / Вес */
+  --bg:#f3f1fb; --surface:#ffffff; --ink:#1d1a2e; --muted:#6c6787; --line:#e3dff2;
+  --prot:#ff5d73; --fat:#ffb020; --carb:#18b3a4; --kcal:#7a5cff;
+  --m1:#ffb020; --m2:#ff5d73; --m3:#7a5cff; --m4:#18b3a4; --m5:#3d8bff;
+  --done:#21c46b; --warn:#ff8a00;
+  --display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --body:"Manrope","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14121f; --surface:#1f1c30; --ink:#f4f2ff; --muted:#a39fbf; --line:#332f4b;
+    --prot:#ff7488; --fat:#ffc04d; --carb:#33d1c1; --kcal:#9b85ff;
+    --m1:#ffc04d; --m2:#ff7488; --m3:#9b85ff; --m4:#33d1c1; --m5:#6aa6ff; --done:#3ad882; --warn:#ffa940;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14121f; --surface:#1f1c30; --ink:#f4f2ff; --muted:#a39fbf; --line:#332f4b;
+  --prot:#ff7488; --fat:#ffc04d; --carb:#33d1c1; --kcal:#9b85ff;
+  --m1:#ffc04d; --m2:#ff7488; --m3:#9b85ff; --m4:#33d1c1; --m5:#6aa6ff; --done:#3ad882; --warn:#ffa940;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto;padding:18px 16px calc(96px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:25px;font-weight:800;line-height:1.15}
+h2{font-size:18px;font-weight:700}
+.sub{color:var(--muted);font-size:14px;margin-top:4px}
+.num{font-variant-numeric:tabular-nums}
+.tab{display:none;flex-direction:column;gap:16px}
+.tab.on{display:flex}
+.card{background:var(--surface);border:2px solid var(--line);border-radius:22px;padding:16px}
+.sync{font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.sync.ok i{background:var(--done)} .sync.err i{background:var(--prot)}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+
+/* nav */
+nav{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:2px solid var(--line);padding:8px 12px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+nav button{font:800 13px var(--body);color:var(--muted);background:transparent;border:0;border-radius:16px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+nav button .big{font-size:24px;line-height:1}
+nav button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--kcal);outline-offset:2px}
+
+/* food */
+.switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--surface);border:2px solid var(--line);border-radius:18px;padding:6px}
+.switch button{font:700 15px var(--body);color:var(--muted);background:transparent;border:0;border-radius:13px;padding:12px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.switch button .big{font-size:24px;line-height:1}
+.switch button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.hint{font-size:13px;color:var(--muted);text-align:center;margin-top:-8px}
+.bars{display:flex;flex-direction:column;gap:12px}
+.bar-top{display:flex;justify-content:space-between;align-items:baseline;font-weight:700;font-size:14px}
+.bar-top b{font-size:17px}
+.track{height:14px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:5px}
+.fill{height:100%;width:0;border-radius:99px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.score{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.score .pct{font-family:var(--display);font-size:40px;font-weight:800;line-height:1}
+.dots{display:flex;gap:6px}
+.dot{width:16px;height:16px;border-radius:50%;background:var(--line)}
+.dot.on{background:var(--done)}
+.meal{background:var(--surface);border-radius:22px;border:2px solid var(--line);border-left:10px solid var(--c);padding:14px 14px 14px 16px}
+.meal.done{border-color:var(--done);border-left-color:var(--done)}
+.meal.done .items{opacity:.55}
+.meal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.meal-head h3{font-size:17px}
+.when{font-size:13px;color:var(--muted);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 4px}
+.chip{font-size:12px;font-weight:800;padding:3px 9px;border-radius:99px;color:#1d1a2e;background:var(--line)}
+.chip.p{background:var(--prot)} .chip.f{background:var(--fat)} .chip.c{background:var(--carb)} .chip.k{background:var(--kcal);color:#fff}
+.chip.ghost{background:transparent;border:2px solid var(--line);color:var(--ink)}
+.items{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column}
+.items li{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.items li:last-child{border-bottom:0}
+.em{font-size:21px;text-align:center}
+.items li.box-h{display:block;font-weight:800;font-size:13px;color:var(--muted);padding:10px 0 2px;border-bottom:0}
+.how{margin-top:10px;font-size:13px;color:var(--muted);font-weight:600;padding:8px 10px;border-radius:12px;background:var(--bg)}
+.what{font-weight:600}
+.what small{display:block;color:var(--muted);font-weight:600;font-size:12px}
+.g{font-family:var(--display);font-weight:700;font-size:17px;white-space:nowrap}
+.g small{font-family:var(--body);font-size:12px;color:var(--muted);font-weight:700}
+.pill{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;font-weight:700;background:color-mix(in srgb,var(--c) 18%,transparent);border-radius:12px;padding:6px 10px}
+.btn{font:800 16px var(--body);border:0;border-radius:16px;padding:14px 16px;width:100%;margin-top:12px;cursor:pointer;background:var(--c,var(--ink));color:#1d1a2e;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn:active{transform:scale(.98)}
+.btn.light{color:#fff}
+.meal.done .btn{background:var(--done);color:#0d2a18}
+.btn.dark{background:var(--ink);color:var(--bg)}
+.btn.ghost{background:transparent;color:var(--muted);border:2px dashed var(--line);font-size:14px}
+.list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.chk{display:flex;align-items:center;gap:12px;font:600 15px var(--body);color:var(--ink);background:var(--bg);border:2px solid var(--line);border-radius:16px;padding:12px;cursor:pointer;text-align:left;width:100%}
+.chk .box{flex:none;width:28px;height:28px;border-radius:9px;border:3px solid var(--muted);display:grid;place-items:center;font-weight:900;color:transparent}
+.chk[aria-pressed="true"]{border-color:var(--done)}
+.chk[aria-pressed="true"] .box{background:var(--done);border-color:var(--done);color:#fff}
+.chk small{display:block;color:var(--muted);font-size:12px}
+.water{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:12px}
+.glass{aspect-ratio:3/4;border-radius:8px 8px 12px 12px;border:3px solid var(--m5);background:transparent;cursor:pointer;position:relative;overflow:hidden;padding:0}
+.glass::after{content:"";position:absolute;left:0;right:0;bottom:0;height:0;background:var(--m5);transition:height .35s}
+.glass.on::after{height:100%}
+.steppers{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.stepper{background:var(--bg);border:2px solid var(--line);border-radius:16px;padding:10px;text-align:center}
+.stepper .lbl{font-size:13px;font-weight:700;color:var(--muted)}
+.stepper .row{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:4px}
+.stepper button{width:38px;height:38px;border-radius:12px;border:0;background:var(--ink);color:var(--bg);font:800 20px var(--body);cursor:pointer}
+.stepper output{font-family:var(--display);font-size:24px;font-weight:800;min-width:28px}
+.shop{list-style:none;margin:12px 0 0;padding:0}
+.shop li{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--line)}
+.shop li:last-child{border-bottom:0}
+.shop .q{font-weight:800;text-align:right}
+.shop .q small{display:block;color:var(--muted);font-size:12px;font-weight:600}
+
+/* gym */
+.wk{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ex{background:var(--surface);border:2px solid var(--line);border-left:10px solid var(--m3);border-radius:22px;padding:14px 14px 14px 16px}
+.ex.done{border-color:var(--done);border-left-color:var(--done)}
+.ex-head{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:start}
+.ex-n{font-family:var(--display);font-weight:800;font-size:20px;line-height:1.2}
+.ex-name{font-weight:800;font-size:16px;line-height:1.3}
+.ex-sets{font-family:var(--display);font-weight:700;font-size:15px;margin-top:4px}
+.ex-c{font-size:13px;color:var(--muted);margin-top:8px}
+.last{font-size:13px;font-weight:700;margin-top:8px;padding:6px 10px;border-radius:10px;background:color-mix(in srgb,var(--done) 15%,transparent);display:inline-block}
+.last.none{background:var(--bg);color:var(--muted)}
+.inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.inputs label{font-size:12px;font-weight:700;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.inputs input{font:800 18px var(--body);color:var(--ink);background:var(--bg);border:2px solid var(--line);border-radius:12px;padding:10px;width:100%}
+.ex-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.ex-btns .btn{margin-top:0;font-size:15px;padding:12px 8px}
+.tick{width:34px;height:34px;border-radius:10px;border:3px solid var(--muted);background:transparent;cursor:pointer;font-weight:900;color:transparent;font-size:18px}
+.ex.done .tick{background:var(--done);border-color:var(--done);color:#fff}
+.target{margin-top:10px;padding:10px 12px;border-radius:14px;font-weight:800;font-size:15px;background:var(--bg);border:2px solid var(--line)}
+.target small{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-top:2px}
+.target.up{border-color:var(--done);background:color-mix(in srgb,var(--done) 14%,transparent)}
+.target.down,.target.stall{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.spark{display:flex;align-items:center;gap:10px;margin-top:8px}
+.spark svg{flex:1;height:44px}
+.delta{font-size:12px;font-weight:800;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.delta.pos{background:color-mix(in srgb,var(--done) 20%,transparent)} .delta.neg{background:color-mix(in srgb,var(--warn) 22%,transparent)} .delta.zero{background:var(--bg);color:var(--muted)}
+.tipbox{margin-top:12px;white-space:pre-wrap;font-weight:600;font-size:15px;padding:12px;border-radius:14px;background:var(--bg)}
+.prog{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-direction:column;gap:12px}
+.prog li{border-bottom:1px dashed var(--line);padding-bottom:10px}
+.prog li:last-child{border-bottom:0}
+.prog .pn{font-weight:800;font-size:14px;display:flex;justify-content:space-between;gap:8px}
+a.vid{font-size:13px;font-weight:800;color:var(--m3);text-decoration:none;display:inline-block;margin-top:8px}
+.timer{position:fixed;inset:0;z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px}
+.timer.on{display:flex}
+.ring{position:relative;width:240px;height:240px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring .t{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--display);font-size:58px;font-weight:800}
+.timer .row{display:flex;gap:10px}
+.timer .row .btn{width:auto;margin:0;padding:12px 18px}
+
+/* weight */
+.big-w{display:flex;align-items:baseline;gap:10px}
+.big-w b{font-family:var(--display);font-size:44px;font-weight:800;line-height:1}
+.verdict{margin-top:10px;font-weight:700;padding:10px 12px;border-radius:14px;background:var(--bg)}
+.wform{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.wform label{font-size:12px;font-weight:700;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.wform input{font:800 20px var(--body);color:var(--ink);background:var(--bg);border:2px solid var(--line);border-radius:12px;padding:12px;width:100%}
+.chart{width:100%;height:auto;margin-top:12px}
+.wlist{list-style:none;padding:0;margin:10px 0 0}
+.wlist li{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-weight:600}
+.wlist li:last-child{border-bottom:0}
+footer{color:var(--muted);font-size:12px;text-align:center}
+canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:30}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="confetti" aria-hidden="true"></canvas>
+<main class="wrap">
+
+<!-- ============ ЕДА ============ -->
+<section class="tab on" id="tab-food" aria-label="Еда">
+  <div class="head">
+    <div><h1>Еда на сегодня</h1><div class="sub" id="today"></div></div>
+    <div class="sync" id="sync"><i></i><span>офлайн</span></div>
+  </div>
+  <div class="switch" role="group" aria-label="Тип дня">
+    <button id="sw-rice" aria-pressed="true"><span class="big">🍚</span>Рисовый день</button>
+    <button id="sw-buck" aria-pressed="false"><span class="big">🌰</span>Гречневый день</button>
+  </div>
+  <div class="hint" id="hint"></div>
+  <div class="card">
+    <div class="score">
+      <div><div class="pct num" id="pct">0%</div><div class="sub">дневной нормы съедено</div></div>
+      <div class="dots" id="dots"></div>
+    </div>
+    <div class="bars" id="bars"></div>
+  </div>
+  <div id="meals" style="display:flex;flex-direction:column;gap:14px"></div>
+  <div class="card"><h2>Таблетки и добавки</h2><div class="list" id="supps"></div></div>
+  <div class="card">
+    <h2>Вода: <span class="num" id="water-n">0</span> из 8 стаканов</h2>
+    <div class="sub">Стакан ≈ 250 мл, всего 2 литра. Тапай по стаканам.</div>
+    <div class="water" id="water"></div>
+  </div>
+  <div class="card">
+    <h2>Список покупок</h2>
+    <div class="sub">Сколько каких дней планируешь — список пересчитается.</div>
+    <div class="steppers">
+      <div class="stepper"><div class="lbl">🍚 Рисовых дней</div><div class="row"><button data-t="rice" data-d="-1" aria-label="Меньше рисовых дней">−</button><output id="n-rice" class="num">4</output><button data-t="rice" data-d="1" aria-label="Больше рисовых дней">+</button></div></div>
+      <div class="stepper"><div class="lbl">🌰 Гречневых дней</div><div class="row"><button data-t="buck" data-d="-1" aria-label="Меньше гречневых дней">−</button><output id="n-buck" class="num">3</output><button data-t="buck" data-d="1" aria-label="Больше гречневых дней">+</button></div></div>
+    </div>
+    <ul class="shop" id="shop"></ul>
+    <button class="btn dark" id="copy">📋 Скопировать список</button>
+  </div>
+  <button class="btn ghost" id="reset">Сбросить отметки за сегодня</button>
+  <footer>Норма: 140 г белка · 50 г жиров · 250 г углеводов · ~2040 ккал. Вес продуктов сырой. Соль — йодированная. Во вторник (футбол) +1 банан перед игрой.</footer>
+</section>
+
+<!-- ============ ЗАЛ ============ -->
+<section class="tab" id="tab-gym" aria-label="Зал">
+  <div class="card" style="border-left:10px solid var(--m3)">
+    <div class="sub" id="gym-label"></div>
+    <h1 id="gym-title" style="margin-top:4px"></h1>
+    <div class="wk" id="gym-chips"></div>
+    <button class="btn" style="--c:var(--m3)" id="gym-tipbtn">🤖 Совет на сегодня</button>
+    <div class="tipbox" id="gym-tip" hidden></div>
+    <div class="bars" style="margin-top:14px"><div><div class="bar-top"><span>Упражнения</span><span class="num"><b id="gym-done">0</b> / <span id="gym-total">0</span></span></div><div class="track"><div class="fill" id="gym-fill" style="background:var(--m3)"></div></div></div></div>
+  </div>
+  <div class="card">
+    <h2>Перед началом</h2>
+    <div class="sub">5 минут кардио и вращения плечами. «Разм. 2 подх.» — перед первым упражнением: ~50% рабочего веса × 10, потом ~75% × 5. <b>ЗДО</b> — сколько повторов оставить в запасе до отказа: ЗДО 1 = мог бы ещё один. Закрыл верх диапазона во всех подходах — в следующий раз +1–2,5 кг.</div>
+  </div>
+  <div id="exercises" style="display:flex;flex-direction:column;gap:14px"></div>
+  <button class="btn dark" id="gym-finish">✅ Тренировка завершена</button>
+  <div class="card" id="gym-analysis-card" hidden style="border-left:10px solid var(--done)"><h2>Разбор</h2><div class="tipbox" id="gym-analysis"></div></div>
+  <button class="btn ghost" id="gym-skip">Пропустить эту тренировку в цикле</button>
+  <div class="card">
+    <h2>📈 Прогресс по упражнениям</h2>
+    <div class="sub">Рабочий вес от тренировки к тренировке.</div>
+    <ul class="prog" id="gym-prog"></ul>
+  </div>
+  <div class="card">
+    <h2>Последние тренировки</h2>
+    <ul class="wlist" id="gym-hist"></ul>
+  </div>
+</section>
+
+<!-- ============ ВЕС ============ -->
+<section class="tab" id="tab-weight" aria-label="Вес">
+  <div class="card">
+    <div class="sub">Последнее взвешивание</div>
+    <div class="big-w"><b class="num" id="w-now">—</b><span class="sub" id="w-waist"></span></div>
+    <div class="verdict" id="w-verdict">Взвешивайся раз в неделю, утром натощак. Тренд посчитаю, когда будет две недели данных.</div>
+  </div>
+  <div class="card">
+    <h2>Записать</h2>
+    <form class="wform" id="wform">
+      <label for="w-in">Вес, кг<input id="w-in" inputmode="decimal" placeholder="64,8" autocomplete="off"></label>
+      <label for="waist-in">Талия, см<input id="waist-in" inputmode="decimal" placeholder="78" autocomplete="off"></label>
+      <button class="btn dark" style="grid-column:1/-1;margin-top:4px" type="submit">💾 Сохранить</button>
+    </form>
+    <div class="sub">Талию меряй по пупку, на выдохе, не втягивая живот.</div>
+  </div>
+  <div class="card">
+    <h2>График</h2>
+    <svg class="chart" id="chart" viewBox="0 0 340 170" role="img" aria-label="График веса"></svg>
+    <ul class="wlist" id="w-list"></ul>
+  </div>
+</section>
+</main>
+
+<div class="timer" id="timer" role="dialog" aria-modal="true" aria-label="Таймер отдыха">
+  <div class="sub" id="timer-ex"></div>
+  <div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="var(--line)" stroke-width="9"/><circle id="ring" cx="50" cy="50" r="44" fill="none" stroke="var(--m3)" stroke-width="9" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg><div class="t num" id="timer-t">0:00</div></div>
+  <div class="row">
+    <button class="btn dark" id="t-minus">−15 с</button>
+    <button class="btn dark" id="t-plus">+15 с</button>
+  </div>
+  <button class="btn" style="--c:var(--m3);max-width:280px" id="t-stop">Стоп, иду на подход</button>
+</div>
+
+<nav role="tablist" aria-label="Разделы">
+  <button role="tab" aria-selected="true" data-tab="food"><span class="big">🍽</span>Еда</button>
+  <button role="tab" aria-selected="false" data-tab="gym"><span class="big">🏋️</span>Зал</button>
+  <button role="tab" aria-selected="false" data-tab="weight"><span class="big">⚖️</span>Вес</button>
+</nav>
+
+<script>
+const PLAN = {"target": {"p": 140, "f": 50, "c": 250, "k": 2040}, "food": {"oats": {"n": "Овсянка цельнозерновая", "e": "🥣", "p": 14.1, "f": 7, "c": 54.1, "k": 363}, "egg": {"n": "Яйца", "e": "🥚", "p": 12.7, "f": 11.5, "c": 0.7, "k": 157}, "oil": {"n": "Масло для жарки", "e": "🫒", "p": 0, "f": 99.9, "c": 0, "k": 899}, "cuc": {"n": "Огурец", "e": "🥒", "p": 0.8, "f": 0.1, "c": 2.5, "k": 14}, "berr": {"n": "Ягоды замороженные", "e": "🫐", "p": 1, "f": 0.3, "c": 9, "k": 45}, "rice": {"n": "Рис Valdo", "e": "🍚", "p": 7, "f": 0.6, "c": 78, "k": 349}, "buck": {"n": "Гречка", "e": "🌰", "p": 12.6, "f": 3.3, "c": 57.1, "k": 308}, "chick": {"n": "Куриное филе", "e": "🍗", "p": 23.6, "f": 1.9, "c": 0.4, "k": 113}, "tom": {"n": "Помидоры", "e": "🍅", "p": 1.1, "f": 0.2, "c": 3.8, "k": 24}, "papr": {"n": "Паприка красная", "e": "🫑", "p": 1, "f": 0.3, "c": 6, "k": 31}, "lett": {"n": "Салат листовой", "e": "🥬", "p": 1.4, "f": 0.2, "c": 2.9, "k": 15}, "banana": {"n": "Банан", "e": "🍌", "p": 1.5, "f": 0.5, "c": 21, "k": 96}, "prot": {"n": "Протеин шоколадный", "e": "🥤", "p": 80, "f": 2, "c": 8, "k": 367}, "gy": {"n": "Греческий йогурт 2%", "e": "🥛", "p": 9, "f": 2, "c": 3.5, "k": 68}, "tvor": {"n": "Творог 0,5%", "e": "🍶", "p": 20, "f": 0.5, "c": 2.8, "k": 96}}, "days": {"rice": {"name": "Рисовый день", "e": "🍚", "meals": [{"id": "b", "t": "Завтрак", "w": "на работе, ~8:00", "col": "--m1", "how": "Банку собери вечером: хлопья + йогурт + протеин + ягоды, перемешай и в холодильник. К утру готово, греть не надо. Яйца свари заранее.", "supp": "om1,pr", "pill": "💊 1 капсула омеги", "items": [["oats", 90, "🫙 Банка: ленивая овсянка"], ["gy", 125, "🫙 Банка: ленивая овсянка"], ["prot", 30, "🫙 Банка: ленивая овсянка"], ["berr", 150, "🫙 Банка: ленивая овсянка"], ["egg", 100, "🥚 Контейнер: яйца + огурец"], ["cuc", 100, "🥚 Контейнер: яйца + огурец"]]}, {"id": "l", "t": "Обед", "w": "на работе, ~12:30", "col": "--m4", "how": "Курицу и гарнир готовь вечером. Овощи — отдельным контейнером, чтобы не размокли. Ешь за ~3 часа до зала.", "supp": "om2", "pill": "💊 1 капсула омеги", "items": [["rice", 125, "🍱 Контейнер: гарнир + курица"], ["chick", 100, "🍱 Контейнер: гарнир + курица"], ["oil", 10, "🍱 Контейнер: гарнир + курица"], ["tom", 150, "🥗 Контейнер: овощи"], ["cuc", 100, "🥗 Контейнер: овощи"], ["papr", 100, "🥗 Контейнер: овощи"]]}, {"id": "d", "t": "Ужин", "w": "дома после зала, ~18:00", "col": "--m5", "how": "Сразу после зала. Курицу можно жарить, запекать или тушить — как удобно.", "supp": "ca", "pill": "💊 1 таблетка кальция", "items": [["chick", 70, "🍽 Тарелка"], ["oil", 10, "🍽 Тарелка"], ["papr", 200, "🍽 Тарелка"], ["tom", 150, "🍽 Тарелка"], ["lett", 50, "🍽 Тарелка"], ["tvor", 100, "🍌 Десерт"], ["banana", 200, "🍌 Десерт"]]}]}, "buck": {"name": "Гречневый день", "e": "🌰", "meals": [{"id": "b", "t": "Завтрак", "w": "на работе, ~8:00", "col": "--m1", "how": "Банку собери вечером: хлопья + йогурт + протеин + ягоды, перемешай и в холодильник. К утру готово, греть не надо. Яйца свари заранее.", "supp": "om1,pr", "pill": "💊 1 капсула омеги", "items": [["oats", 90, "🫙 Банка: ленивая овсянка"], ["gy", 250, "🫙 Банка: ленивая овсянка"], ["prot", 30, "🫙 Банка: ленивая овсянка"], ["berr", 100, "🫙 Банка: ленивая овсянка"], ["egg", 100, "🥚 Контейнер: яйца + огурец"], ["cuc", 100, "🥚 Контейнер: яйца + огурец"]]}, {"id": "l", "t": "Обед", "w": "на работе, ~12:30", "col": "--m4", "how": "Курицу и гарнир готовь вечером. Овощи — отдельным контейнером, чтобы не размокли. Ешь за ~3 часа до зала.", "supp": "om2", "pill": "💊 1 капсула омеги", "items": [["buck", 100, "🍱 Контейнер: гарнир + курица"], ["chick", 70, "🍱 Контейнер: гарнир + курица"], ["oil", 10, "🍱 Контейнер: гарнир + курица"], ["tom", 150, "🥗 Контейнер: овощи"], ["cuc", 100, "🥗 Контейнер: овощи"], ["papr", 100, "🥗 Контейнер: овощи"]]}, {"id": "d", "t": "Ужин", "w": "дома после зала, ~18:00", "col": "--m5", "how": "Сразу после зала. Курицу можно жарить, запекать или тушить — как удобно.", "supp": "ca", "pill": "💊 1 таблетка кальция", "items": [["buck", 100, "🍽 Тарелка"], ["chick", 70, "🍽 Тарелка"], ["oil", 5, "🍽 Тарелка"], ["papr", 100, "🍽 Тарелка"], ["lett", 50, "🍽 Тарелка"], ["banana", 200, "🍌 Десерт"]]}]}}, "supps": [{"id": "om1", "t": "Омега PARENE, 1 капсула", "s": "с завтраком"}, {"id": "om2", "t": "Омега PARENE, 1 капсула", "s": "с обедом"}, {"id": "ca", "t": "Кальций + D3, 1 таблетка", "s": "с ужином"}, {"id": "pr", "t": "Протеин, 1 мерная ложка", "s": "в ленивой овсянке на завтрак"}]};
+const PROGRAM = [{"title": "Грудь + бицепс", "light": false, "week": 1, "label": "Неделя 1 · вариант A", "tip": "Втягивайся: ЗДО 2, веса записывай", "ex": [{"n": "Жим гантелей на наклонной скамье 30°", "s": "Разм. 2 подх. Раб. 3×6–10", "z": 2, "c": "Лопатки сведены и прижаты к скамье. Опускай до растяжения груди, локти под 45–60° к корпусу, не разводи в стороны.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=xwtaHancCQc"}, {"n": "Жим штанги лёжа в тренажёре Смита", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 2, "c": "Гриф опускай на низ груди, локти под 45–60°. Без отбива от груди и без моста.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=R0RyxO58XuM"}, {"n": "Жим в рычажном тренажёре", "s": "2×10–12", "z": 1, "c": "Подстрой сиденье, чтобы ручки были на уровне середины груди. Давишь грудью, плечи не поднимаешь.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=ibeKYPkHsK8"}, {"n": "Сведение рук в тренажёре (бабочка)", "s": "3×12–15", "z": 1, "c": "Локти чуть согнуты и на уровне плеч. В конце сожми грудь на секунду, назад — до растяжения.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=A9dZr9RxwwY"}, {"n": "Сгибание рук со штангой", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Локти прижаты к бокам и не уезжают вперёд. Без раскачки корпусом. Вниз — медленно, до прямых рук.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=eaHz087oPYk"}, {"n": "Сгибание рук в блоке", "s": "2×12–15", "z": 1, "c": "Постоянное натяжение. Вверху пауза и сжатие, вниз медленно.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=dhJ2keTZGI4"}, {"n": "Сгибание рук хватом «молот»", "s": "2×10–12", "z": 1, "c": "Ладони смотрят друг на друга. Качает брахиалис — он делает руку визуально толще.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=WsWd1sK6nzY"}, {"n": "Подъём ног в висе на локтях", "s": "3×12–15", "z": 1, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}, {"title": "Спина + трицепс", "light": false, "week": 1, "label": "Неделя 1 · вариант A", "tip": "Втягивайся: ЗДО 2, веса записывай", "ex": [{"n": "Вертикальная тяга широким хватом к груди", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 2, "c": "Тяни локтями вниз к бокам, грудь навстречу грифу. Вверху — полное растяжение спины.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=98DtjucqpT4"}, {"n": "Тяга Т-грифа с опорой узким хватом", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 2, "c": "Грудь прижата к опоре всё время. Тяни локтями назад, вверху сведи лопатки на секунду.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=xgKjVpE9Tnc"}, {"n": "Горизонтальная тяга блока широким хватом", "s": "3×10–12", "z": 1, "c": "Локти в стороны — работает верх спины и задняя дельта. Корпус не раскачивай.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=1NNNrPc4GlM"}, {"n": "Пуловер на блоке с верёвкой стоя", "s": "2×12–15", "z": 1, "c": "Руки почти прямые, тянешь широчайшими дугой к бёдрам. Вверху — растяжение.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=AJc-oynbspA"}, {"n": "Французский жим с гантелями лёжа", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Локти смотрят в потолок и не гуляют. Опускай гантели за голову до растяжения трицепса.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=UhjZOt3w7Uo"}, {"n": "Разгибание одной руки из-за головы с гантелью сидя", "s": "2×10–12", "z": 1, "c": "Свободной рукой придерживай локоть рабочей. Глубоко вниз, вверх без щелчка.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=G7TbiM0arjQ"}, {"n": "Разгибание рук в блоке с верёвкой", "s": "2×12–15", "z": 1, "c": "Локти прижаты к бокам. Внизу разводи концы каната и дожимай.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=7_CV_X-3XRE"}, {"n": "Скручивание лёжа на наклонной скамье", "s": "3×12–15", "z": 1, "c": "Скручивайся, а не садись: поясница прижата, подбородок к груди. Выдох на подъёме.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=4DbFWZs118A"}]}, {"title": "Плечи + руки", "light": false, "week": 1, "label": "Неделя 1 · вариант A", "tip": "Втягивайся: ЗДО 2, веса записывай", "ex": [{"n": "Жим гантелей сидя", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 2, "c": "Спинка почти вертикальная. Гантели опускай до уровня ушей, локти чуть вперёд от корпуса.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=uaClhQqTGh4"}, {"n": "Махи гантелями в стороны сидя", "s": "4×12–15", "z": 1, "c": "Сидя без раскачки. Поднимай до уровня плеч локтями, мизинец чуть выше большого пальца.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Разведение рук в тренажёре (обратная бабочка)", "s": "3×12–15", "z": 1, "c": "Грудью к спинке, руки почти прямые. Разводи назад задней дельтой, лопатки не своди.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=riZefHfau5k"}, {"n": "Махи гантелями в стороны стоя", "s": "3×15–20", "z": 1, "c": "Лёгкий наклон вперёд. Вес такой, чтобы без читинга. Последний подход — дропсет: −30% и ещё до отказа.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Сгибание рук в блоке с верёвкой (молот)", "s": "2×12–15", "z": 1, "c": "Локти прижаты, вверху разводи концы каната в стороны.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=OeykixsqpHA"}, {"n": "Разгибание рук в блоке (прямая ручка)", "s": "2×12–15", "z": 1, "c": "Локти прижаты, работают только предплечья. Без помощи корпусом.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=Kn4h8gY7raQ"}, {"n": "Подъём ног в висе на локтях", "s": "3×12–15", "z": 1, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}, {"title": "Грудь + бицепс", "light": false, "week": 2, "label": "Неделя 2 · вариант B", "tip": "ЗДО 2, если вчистую — +1–2,5 кг", "ex": [{"n": "Жим в тренажёре от груди вверх", "s": "Разм. 2 подх. Раб. 3×6–10", "z": 2, "c": "Спина прижата, лопатки сведены. Внизу — растяжение груди, вверху не выпрямляй руки до щелчка.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=ibeKYPkHsK8"}, {"n": "Жим гантелей на горизонтальной скамье", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 2, "c": "Опускай гантели глубоко, до растяжения груди. Вверху не стукай гантели друг о друга.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=odsAnZIk58k"}, {"n": "Жим в тренажёре от груди вперёд", "s": "2×10–12", "z": 1, "c": "Ручки на уровне середины груди. Медленно назад, мощно вперёд.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=ibeKYPkHsK8"}, {"n": "Разведение гантелей на наклонной скамье 30°", "s": "3×10–12", "z": 1, "c": "Вес умеренный. Опускай широко до сильного растяжения груди, локти слегка согнуты и не меняют угол.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=QaJcczm4uZU"}, {"n": "Сгибание рук с гантелями сидя с разворотом", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Сидя спина прижата — так не читингуешь. Разворачивай кисть мизинцем вверх на подъёме.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=3qpebLCt_2c"}, {"n": "Сгибание рук с разворотом стоя", "s": "2×10–12", "z": 1, "c": "Поочерёдно или вместе. Полная амплитуда, без раскачки.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=3qpebLCt_2c"}, {"n": "Сгибание рук в блоке с верёвкой (молот)", "s": "2×12–15", "z": 1, "c": "Локти прижаты, вверху разводи концы каната в стороны.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=OeykixsqpHA"}, {"n": "Скручивание лёжа на наклонной скамье", "s": "3×12–15", "z": 1, "c": "Скручивайся, а не садись: поясница прижата, подбородок к груди. Выдох на подъёме.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=4DbFWZs118A"}]}, {"title": "Спина + трицепс", "light": false, "week": 2, "label": "Неделя 2 · вариант B", "tip": "ЗДО 2, если вчистую — +1–2,5 кг", "ex": [{"n": "Вертикальная тяга параллельным узким хватом", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 2, "c": "Грудь вверх, локти вниз вдоль корпуса. Вверху дай широчайшим растянуться.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=XTFvTcB4jvo"}, {"n": "Тяга гантелей двумя руками на наклонной скамье", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 2, "c": "Лёжа грудью на скамье ~30°. Тяни локтями к поясу, без рывка.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=fgyKfNzjqxg"}, {"n": "Горизонтальная тяга блока узким хватом", "s": "3×10–12", "z": 1, "c": "Тяни к низу живота, сводя лопатки. Вперёд — до растяжения, но спина ровная.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=eLq8RGaHtJE"}, {"n": "Пуловер на блоке с прямой ручкой стоя", "s": "2×12–15", "z": 1, "c": "Руки почти прямые, без помощи трицепса. Чувствуешь широчайшие.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=AJc-oynbspA"}, {"n": "Разгибание рук из-за головы с гантелью сидя", "s": "Разм. 1 подх. Раб. 3×8–12", "z": 1, "c": "Локти близко к голове. Внизу — глубокое растяжение трицепса, это главная фишка упражнения.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=7QVHcc_aP5Y"}, {"n": "Разгибание рук в блоке (прямая ручка)", "s": "2×10–12", "z": 1, "c": "Локти прижаты, работают только предплечья. Без помощи корпусом.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=Kn4h8gY7raQ"}, {"n": "Разгибание рук в блоке с верёвкой", "s": "2×12–15", "z": 1, "c": "Локти прижаты к бокам. Внизу разводи концы каната и дожимай.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=7_CV_X-3XRE"}, {"n": "Подъём ног в висе на локтях", "s": "3×12–15", "z": 1, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}, {"title": "Плечи + руки", "light": false, "week": 2, "label": "Неделя 2 · вариант B", "tip": "ЗДО 2, если вчистую — +1–2,5 кг", "ex": [{"n": "Жим гантелей сидя", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 2, "c": "Спинка почти вертикальная. Гантели опускай до уровня ушей, локти чуть вперёд от корпуса.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=uaClhQqTGh4"}, {"n": "Махи гантелями в стороны стоя", "s": "4×12–15", "z": 1, "c": "Лёгкий наклон вперёд. Вес такой, чтобы без читинга. Последний подход — дропсет: −30% и ещё до отказа.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Разведение рук в тренажёре (обратная бабочка)", "s": "3×12–15", "z": 1, "c": "Грудью к спинке, руки почти прямые. Разводи назад задней дельтой, лопатки не своди.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=riZefHfau5k"}, {"n": "Махи гантелями в стороны сидя", "s": "3×15–20", "z": 1, "c": "Сидя без раскачки. Поднимай до уровня плеч локтями, мизинец чуть выше большого пальца.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Сгибание рук в блоке", "s": "2×12–15", "z": 1, "c": "Постоянное натяжение. Вверху пауза и сжатие, вниз медленно.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=dhJ2keTZGI4"}, {"n": "Разгибание рук в блоке с верёвкой", "s": "2×12–15", "z": 1, "c": "Локти прижаты к бокам. Внизу разводи концы каната и дожимай.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=7_CV_X-3XRE"}, {"n": "Скручивание лёжа на наклонной скамье", "s": "3×12–15", "z": 1, "c": "Скручивайся, а не садись: поясница прижата, подбородок к груди. Выдох на подъёме.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=4DbFWZs118A"}]}, {"title": "Грудь + бицепс", "light": false, "week": 3, "label": "Неделя 3 · вариант A", "tip": "ЗДО 1: подходы тяжелее", "ex": [{"n": "Жим гантелей на наклонной скамье 30°", "s": "Разм. 2 подх. Раб. 3×6–10", "z": 1, "c": "Лопатки сведены и прижаты к скамье. Опускай до растяжения груди, локти под 45–60° к корпусу, не разводи в стороны.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=xwtaHancCQc"}, {"n": "Жим штанги лёжа в тренажёре Смита", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Гриф опускай на низ груди, локти под 45–60°. Без отбива от груди и без моста.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=R0RyxO58XuM"}, {"n": "Жим в рычажном тренажёре", "s": "2×10–12", "z": 1, "c": "Подстрой сиденье, чтобы ручки были на уровне середины груди. Давишь грудью, плечи не поднимаешь.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=ibeKYPkHsK8"}, {"n": "Сведение рук в тренажёре (бабочка)", "s": "3×12–15", "z": 1, "c": "Локти чуть согнуты и на уровне плеч. В конце сожми грудь на секунду, назад — до растяжения.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=A9dZr9RxwwY"}, {"n": "Сгибание рук со штангой", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Локти прижаты к бокам и не уезжают вперёд. Без раскачки корпусом. Вниз — медленно, до прямых рук.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=eaHz087oPYk"}, {"n": "Сгибание рук в блоке", "s": "2×12–15", "z": 1, "c": "Постоянное натяжение. Вверху пауза и сжатие, вниз медленно.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=dhJ2keTZGI4"}, {"n": "Сгибание рук хватом «молот»", "s": "2×10–12", "z": 1, "c": "Ладони смотрят друг на друга. Качает брахиалис — он делает руку визуально толще.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=WsWd1sK6nzY"}, {"n": "Подъём ног в висе на локтях", "s": "3×12–15", "z": 1, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}, {"title": "Спина + трицепс", "light": false, "week": 3, "label": "Неделя 3 · вариант A", "tip": "ЗДО 1: подходы тяжелее", "ex": [{"n": "Вертикальная тяга широким хватом к груди", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 1, "c": "Тяни локтями вниз к бокам, грудь навстречу грифу. Вверху — полное растяжение спины.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=98DtjucqpT4"}, {"n": "Тяга Т-грифа с опорой узким хватом", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Грудь прижата к опоре всё время. Тяни локтями назад, вверху сведи лопатки на секунду.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=xgKjVpE9Tnc"}, {"n": "Горизонтальная тяга блока широким хватом", "s": "3×10–12", "z": 1, "c": "Локти в стороны — работает верх спины и задняя дельта. Корпус не раскачивай.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=1NNNrPc4GlM"}, {"n": "Пуловер на блоке с верёвкой стоя", "s": "2×12–15", "z": 1, "c": "Руки почти прямые, тянешь широчайшими дугой к бёдрам. Вверху — растяжение.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=AJc-oynbspA"}, {"n": "Французский жим с гантелями лёжа", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Локти смотрят в потолок и не гуляют. Опускай гантели за голову до растяжения трицепса.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=UhjZOt3w7Uo"}, {"n": "Разгибание одной руки из-за головы с гантелью сидя", "s": "2×10–12", "z": 1, "c": "Свободной рукой придерживай локоть рабочей. Глубоко вниз, вверх без щелчка.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=G7TbiM0arjQ"}, {"n": "Разгибание рук в блоке с верёвкой", "s": "2×12–15", "z": 1, "c": "Локти прижаты к бокам. Внизу разводи концы каната и дожимай.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=7_CV_X-3XRE"}, {"n": "Скручивание лёжа на наклонной скамье", "s": "3×12–15", "z": 1, "c": "Скручивайся, а не садись: поясница прижата, подбородок к груди. Выдох на подъёме.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=4DbFWZs118A"}]}, {"title": "Плечи + руки", "light": false, "week": 3, "label": "Неделя 3 · вариант A", "tip": "ЗДО 1: подходы тяжелее", "ex": [{"n": "Жим гантелей сидя", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 1, "c": "Спинка почти вертикальная. Гантели опускай до уровня ушей, локти чуть вперёд от корпуса.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=uaClhQqTGh4"}, {"n": "Махи гантелями в стороны сидя", "s": "4×12–15", "z": 1, "c": "Сидя без раскачки. Поднимай до уровня плеч локтями, мизинец чуть выше большого пальца.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Разведение рук в тренажёре (обратная бабочка)", "s": "3×12–15", "z": 1, "c": "Грудью к спинке, руки почти прямые. Разводи назад задней дельтой, лопатки не своди.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=riZefHfau5k"}, {"n": "Махи гантелями в стороны стоя", "s": "3×15–20", "z": 1, "c": "Лёгкий наклон вперёд. Вес такой, чтобы без читинга. Последний подход — дропсет: −30% и ещё до отказа.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Сгибание рук в блоке с верёвкой (молот)", "s": "2×12–15", "z": 1, "c": "Локти прижаты, вверху разводи концы каната в стороны.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=OeykixsqpHA"}, {"n": "Разгибание рук в блоке (прямая ручка)", "s": "2×12–15", "z": 1, "c": "Локти прижаты, работают только предплечья. Без помощи корпусом.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=Kn4h8gY7raQ"}, {"n": "Подъём ног в висе на локтях", "s": "3×12–15", "z": 1, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}, {"title": "Грудь + бицепс", "light": false, "week": 4, "label": "Неделя 4 · вариант B", "tip": "ЗДО 1, изоляция до отказа", "ex": [{"n": "Жим в тренажёре от груди вверх", "s": "Разм. 2 подх. Раб. 3×6–10", "z": 1, "c": "Спина прижата, лопатки сведены. Внизу — растяжение груди, вверху не выпрямляй руки до щелчка.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=ibeKYPkHsK8"}, {"n": "Жим гантелей на горизонтальной скамье", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Опускай гантели глубоко, до растяжения груди. Вверху не стукай гантели друг о друга.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=odsAnZIk58k"}, {"n": "Жим в тренажёре от груди вперёд", "s": "2×10–12", "z": 0, "c": "Ручки на уровне середины груди. Медленно назад, мощно вперёд.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=ibeKYPkHsK8"}, {"n": "Разведение гантелей на наклонной скамье 30°", "s": "3×10–12", "z": 0, "c": "Вес умеренный. Опускай широко до сильного растяжения груди, локти слегка согнуты и не меняют угол.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=QaJcczm4uZU"}, {"n": "Сгибание рук с гантелями сидя с разворотом", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 0, "c": "Сидя спина прижата — так не читингуешь. Разворачивай кисть мизинцем вверх на подъёме.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=3qpebLCt_2c"}, {"n": "Сгибание рук с разворотом стоя", "s": "2×10–12", "z": 0, "c": "Поочерёдно или вместе. Полная амплитуда, без раскачки.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=3qpebLCt_2c"}, {"n": "Сгибание рук в блоке с верёвкой (молот)", "s": "2×12–15", "z": 0, "c": "Локти прижаты, вверху разводи концы каната в стороны.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=OeykixsqpHA"}, {"n": "Скручивание лёжа на наклонной скамье", "s": "3×12–15", "z": 1, "c": "Скручивайся, а не садись: поясница прижата, подбородок к груди. Выдох на подъёме.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=4DbFWZs118A"}]}, {"title": "Спина + трицепс", "light": false, "week": 4, "label": "Неделя 4 · вариант B", "tip": "ЗДО 1, изоляция до отказа", "ex": [{"n": "Вертикальная тяга параллельным узким хватом", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 1, "c": "Грудь вверх, локти вниз вдоль корпуса. Вверху дай широчайшим растянуться.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=XTFvTcB4jvo"}, {"n": "Тяга гантелей двумя руками на наклонной скамье", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Лёжа грудью на скамье ~30°. Тяни локтями к поясу, без рывка.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=fgyKfNzjqxg"}, {"n": "Горизонтальная тяга блока узким хватом", "s": "3×10–12", "z": 0, "c": "Тяни к низу живота, сводя лопатки. Вперёд — до растяжения, но спина ровная.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=eLq8RGaHtJE"}, {"n": "Пуловер на блоке с прямой ручкой стоя", "s": "2×12–15", "z": 0, "c": "Руки почти прямые, без помощи трицепса. Чувствуешь широчайшие.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=AJc-oynbspA"}, {"n": "Разгибание рук из-за головы с гантелью сидя", "s": "Разм. 1 подх. Раб. 3×8–12", "z": 0, "c": "Локти близко к голове. Внизу — глубокое растяжение трицепса, это главная фишка упражнения.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=7QVHcc_aP5Y"}, {"n": "Разгибание рук в блоке (прямая ручка)", "s": "2×10–12", "z": 0, "c": "Локти прижаты, работают только предплечья. Без помощи корпусом.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=Kn4h8gY7raQ"}, {"n": "Разгибание рук в блоке с верёвкой", "s": "2×12–15", "z": 0, "c": "Локти прижаты к бокам. Внизу разводи концы каната и дожимай.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=7_CV_X-3XRE"}, {"n": "Подъём ног в висе на локтях", "s": "3×12–15", "z": 1, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}, {"title": "Плечи + руки", "light": false, "week": 4, "label": "Неделя 4 · вариант B", "tip": "ЗДО 1, изоляция до отказа", "ex": [{"n": "Жим гантелей сидя", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 1, "c": "Спинка почти вертикальная. Гантели опускай до уровня ушей, локти чуть вперёд от корпуса.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=uaClhQqTGh4"}, {"n": "Махи гантелями в стороны стоя", "s": "4×12–15", "z": 0, "c": "Лёгкий наклон вперёд. Вес такой, чтобы без читинга. Последний подход — дропсет: −30% и ещё до отказа.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Разведение рук в тренажёре (обратная бабочка)", "s": "3×12–15", "z": 0, "c": "Грудью к спинке, руки почти прямые. Разводи назад задней дельтой, лопатки не своди.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=riZefHfau5k"}, {"n": "Махи гантелями в стороны сидя", "s": "3×15–20", "z": 0, "c": "Сидя без раскачки. Поднимай до уровня плеч локтями, мизинец чуть выше большого пальца.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Сгибание рук в блоке", "s": "2×12–15", "z": 0, "c": "Постоянное натяжение. Вверху пауза и сжатие, вниз медленно.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=dhJ2keTZGI4"}, {"n": "Разгибание рук в блоке с верёвкой", "s": "2×12–15", "z": 0, "c": "Локти прижаты к бокам. Внизу разводи концы каната и дожимай.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=7_CV_X-3XRE"}, {"n": "Скручивание лёжа на наклонной скамье", "s": "3×12–15", "z": 1, "c": "Скручивайся, а не садись: поясница прижата, подбородок к груди. Выдох на подъёме.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=4DbFWZs118A"}]}, {"title": "Грудь + бицепс", "light": false, "week": 5, "label": "Неделя 5 · вариант A", "tip": "Пик блока: дави рекорды", "ex": [{"n": "Жим гантелей на наклонной скамье 30°", "s": "Разм. 2 подх. Раб. 3×6–10", "z": 1, "c": "Лопатки сведены и прижаты к скамье. Опускай до растяжения груди, локти под 45–60° к корпусу, не разводи в стороны.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=xwtaHancCQc"}, {"n": "Жим штанги лёжа в тренажёре Смита", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Гриф опускай на низ груди, локти под 45–60°. Без отбива от груди и без моста.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=R0RyxO58XuM"}, {"n": "Жим в рычажном тренажёре", "s": "2×10–12", "z": 0, "c": "Подстрой сиденье, чтобы ручки были на уровне середины груди. Давишь грудью, плечи не поднимаешь.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=ibeKYPkHsK8"}, {"n": "Сведение рук в тренажёре (бабочка)", "s": "3×12–15", "z": 0, "c": "Локти чуть согнуты и на уровне плеч. В конце сожми грудь на секунду, назад — до растяжения.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=A9dZr9RxwwY"}, {"n": "Сгибание рук со штангой", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 0, "c": "Локти прижаты к бокам и не уезжают вперёд. Без раскачки корпусом. Вниз — медленно, до прямых рук.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=eaHz087oPYk"}, {"n": "Сгибание рук в блоке", "s": "2×12–15", "z": 0, "c": "Постоянное натяжение. Вверху пауза и сжатие, вниз медленно.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=dhJ2keTZGI4"}, {"n": "Сгибание рук хватом «молот»", "s": "2×10–12", "z": 0, "c": "Ладони смотрят друг на друга. Качает брахиалис — он делает руку визуально толще.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=WsWd1sK6nzY"}, {"n": "Подъём ног в висе на локтях", "s": "3×12–15", "z": 1, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}, {"title": "Спина + трицепс", "light": false, "week": 5, "label": "Неделя 5 · вариант A", "tip": "Пик блока: дави рекорды", "ex": [{"n": "Вертикальная тяга широким хватом к груди", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 1, "c": "Тяни локтями вниз к бокам, грудь навстречу грифу. Вверху — полное растяжение спины.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=98DtjucqpT4"}, {"n": "Тяга Т-грифа с опорой узким хватом", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 1, "c": "Грудь прижата к опоре всё время. Тяни локтями назад, вверху сведи лопатки на секунду.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=xgKjVpE9Tnc"}, {"n": "Горизонтальная тяга блока широким хватом", "s": "3×10–12", "z": 0, "c": "Локти в стороны — работает верх спины и задняя дельта. Корпус не раскачивай.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=1NNNrPc4GlM"}, {"n": "Пуловер на блоке с верёвкой стоя", "s": "2×12–15", "z": 0, "c": "Руки почти прямые, тянешь широчайшими дугой к бёдрам. Вверху — растяжение.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=AJc-oynbspA"}, {"n": "Французский жим с гантелями лёжа", "s": "Разм. 1 подх. Раб. 3×8–10", "z": 0, "c": "Локти смотрят в потолок и не гуляют. Опускай гантели за голову до растяжения трицепса.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=UhjZOt3w7Uo"}, {"n": "Разгибание одной руки из-за головы с гантелью сидя", "s": "2×10–12", "z": 0, "c": "Свободной рукой придерживай локоть рабочей. Глубоко вниз, вверх без щелчка.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=G7TbiM0arjQ"}, {"n": "Разгибание рук в блоке с верёвкой", "s": "2×12–15", "z": 0, "c": "Локти прижаты к бокам. Внизу разводи концы каната и дожимай.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=7_CV_X-3XRE"}, {"n": "Скручивание лёжа на наклонной скамье", "s": "3×12–15", "z": 1, "c": "Скручивайся, а не садись: поясница прижата, подбородок к груди. Выдох на подъёме.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=4DbFWZs118A"}]}, {"title": "Плечи + руки", "light": false, "week": 5, "label": "Неделя 5 · вариант A", "tip": "Пик блока: дави рекорды", "ex": [{"n": "Жим гантелей сидя", "s": "Разм. 2 подх. Раб. 3×8–10", "z": 1, "c": "Спинка почти вертикальная. Гантели опускай до уровня ушей, локти чуть вперёд от корпуса.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=uaClhQqTGh4"}, {"n": "Махи гантелями в стороны сидя", "s": "4×12–15", "z": 0, "c": "Сидя без раскачки. Поднимай до уровня плеч локтями, мизинец чуть выше большого пальца.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Разведение рук в тренажёре (обратная бабочка)", "s": "3×12–15", "z": 0, "c": "Грудью к спинке, руки почти прямые. Разводи назад задней дельтой, лопатки не своди.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=riZefHfau5k"}, {"n": "Махи гантелями в стороны стоя", "s": "3×15–20", "z": 0, "c": "Лёгкий наклон вперёд. Вес такой, чтобы без читинга. Последний подход — дропсет: −30% и ещё до отказа.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Сгибание рук в блоке с верёвкой (молот)", "s": "2×12–15", "z": 0, "c": "Локти прижаты, вверху разводи концы каната в стороны.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=OeykixsqpHA"}, {"n": "Разгибание рук в блоке (прямая ручка)", "s": "2×12–15", "z": 0, "c": "Локти прижаты, работают только предплечья. Без помощи корпусом.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=Kn4h8gY7raQ"}, {"n": "Подъём ног в висе на локтях", "s": "3×12–15", "z": 1, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}, {"title": "Грудь + бицепс", "light": true, "week": 6, "label": "Неделя 6 · разгрузка", "tip": "Разгрузка: веса −40%, 2 подхода, техника", "ex": [{"n": "Жим гантелей на наклонной скамье 30°", "s": "Раб. 2×6–10", "z": 4, "c": "Лопатки сведены и прижаты к скамье. Опускай до растяжения груди, локти под 45–60° к корпусу, не разводи в стороны.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=xwtaHancCQc"}, {"n": "Жим штанги лёжа в тренажёре Смита", "s": "Раб. 2×8–10", "z": 4, "c": "Гриф опускай на низ груди, локти под 45–60°. Без отбива от груди и без моста.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=R0RyxO58XuM"}, {"n": "Жим в рычажном тренажёре", "s": "Раб. 2×10–12", "z": 4, "c": "Подстрой сиденье, чтобы ручки были на уровне середины груди. Давишь грудью, плечи не поднимаешь.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=ibeKYPkHsK8"}, {"n": "Сведение рук в тренажёре (бабочка)", "s": "Раб. 2×12–15", "z": 4, "c": "Локти чуть согнуты и на уровне плеч. В конце сожми грудь на секунду, назад — до растяжения.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=A9dZr9RxwwY"}, {"n": "Сгибание рук со штангой", "s": "Раб. 2×8–10", "z": 4, "c": "Локти прижаты к бокам и не уезжают вперёд. Без раскачки корпусом. Вниз — медленно, до прямых рук.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=eaHz087oPYk"}, {"n": "Сгибание рук в блоке", "s": "Раб. 2×12–15", "z": 4, "c": "Постоянное натяжение. Вверху пауза и сжатие, вниз медленно.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=dhJ2keTZGI4"}, {"n": "Сгибание рук хватом «молот»", "s": "Раб. 2×10–12", "z": 4, "c": "Ладони смотрят друг на друга. Качает брахиалис — он делает руку визуально толще.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=WsWd1sK6nzY"}, {"n": "Подъём ног в висе на локтях", "s": "Раб. 2×12–15", "z": 2, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}, {"title": "Спина + трицепс", "light": true, "week": 6, "label": "Неделя 6 · разгрузка", "tip": "Разгрузка: веса −40%, 2 подхода, техника", "ex": [{"n": "Вертикальная тяга широким хватом к груди", "s": "Раб. 2×8–10", "z": 4, "c": "Тяни локтями вниз к бокам, грудь навстречу грифу. Вверху — полное растяжение спины.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=98DtjucqpT4"}, {"n": "Тяга Т-грифа с опорой узким хватом", "s": "Раб. 2×8–10", "z": 4, "c": "Грудь прижата к опоре всё время. Тяни локтями назад, вверху сведи лопатки на секунду.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=xgKjVpE9Tnc"}, {"n": "Горизонтальная тяга блока широким хватом", "s": "Раб. 2×10–12", "z": 4, "c": "Локти в стороны — работает верх спины и задняя дельта. Корпус не раскачивай.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=1NNNrPc4GlM"}, {"n": "Пуловер на блоке с верёвкой стоя", "s": "Раб. 2×12–15", "z": 4, "c": "Руки почти прямые, тянешь широчайшими дугой к бёдрам. Вверху — растяжение.", "r": "1,30 мин", "v": "https://www.youtube.com/watch?v=AJc-oynbspA"}, {"n": "Французский жим с гантелями лёжа", "s": "Раб. 2×8–10", "z": 4, "c": "Локти смотрят в потолок и не гуляют. Опускай гантели за голову до растяжения трицепса.", "r": "2 мин", "v": "https://www.youtube.com/watch?v=UhjZOt3w7Uo"}, {"n": "Разгибание одной руки из-за головы с гантелью сидя", "s": "Раб. 2×10–12", "z": 4, "c": "Свободной рукой придерживай локоть рабочей. Глубоко вниз, вверх без щелчка.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=G7TbiM0arjQ"}, {"n": "Разгибание рук в блоке с верёвкой", "s": "Раб. 2×12–15", "z": 4, "c": "Локти прижаты к бокам. Внизу разводи концы каната и дожимай.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=7_CV_X-3XRE"}, {"n": "Скручивание лёжа на наклонной скамье", "s": "Раб. 2×12–15", "z": 2, "c": "Скручивайся, а не садись: поясница прижата, подбородок к груди. Выдох на подъёме.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=4DbFWZs118A"}]}, {"title": "Плечи + руки", "light": true, "week": 6, "label": "Неделя 6 · разгрузка", "tip": "Разгрузка: веса −40%, 2 подхода, техника", "ex": [{"n": "Жим гантелей сидя", "s": "Раб. 2×8–10", "z": 4, "c": "Спинка почти вертикальная. Гантели опускай до уровня ушей, локти чуть вперёд от корпуса.", "r": "2,30 мин", "v": "https://www.youtube.com/watch?v=uaClhQqTGh4"}, {"n": "Махи гантелями в стороны сидя", "s": "Раб. 2×12–15", "z": 4, "c": "Сидя без раскачки. Поднимай до уровня плеч локтями, мизинец чуть выше большого пальца.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Разведение рук в тренажёре (обратная бабочка)", "s": "Раб. 2×12–15", "z": 4, "c": "Грудью к спинке, руки почти прямые. Разводи назад задней дельтой, лопатки не своди.", "r": "1,15 мин", "v": "https://www.youtube.com/watch?v=riZefHfau5k"}, {"n": "Махи гантелями в стороны стоя", "s": "Раб. 2×15–20", "z": 4, "c": "Лёгкий наклон вперёд. Вес такой, чтобы без читинга. Последний подход — дропсет: −30% и ещё до отказа.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=jlz9upE5_hE"}, {"n": "Сгибание рук в блоке с верёвкой (молот)", "s": "Раб. 2×12–15", "z": 4, "c": "Локти прижаты, вверху разводи концы каната в стороны.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=OeykixsqpHA"}, {"n": "Разгибание рук в блоке (прямая ручка)", "s": "Раб. 2×12–15", "z": 4, "c": "Локти прижаты, работают только предплечья. Без помощи корпусом.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=Kn4h8gY7raQ"}, {"n": "Подъём ног в висе на локтях", "s": "Раб. 2×12–15", "z": 2, "c": "Поднимай колени к груди, подкручивая таз. Вниз медленно, без раскачки.", "r": "1 мин", "v": "https://www.youtube.com/watch?v=2dAvqufnNXU"}]}];
+const FOOD = PLAN.food, TARGET = PLAN.target;
+
+// ---------- Telegram + API ----------
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+const INIT = (tg && tg.initData) || '';
+const API = new URLSearchParams(location.search).get('api') || '';
+const ONLINE = !!(API && INIT);
+if (tg) { try { tg.ready(); tg.expand(); if (tg.colorScheme) document.documentElement.dataset.theme = tg.colorScheme; } catch (e) {} }
+const buzz = (t) => { try { if (tg && tg.HapticFeedback) t === 'ok' ? tg.HapticFeedback.notificationOccurred('success') : tg.HapticFeedback.impactOccurred('light'); else if (navigator.vibrate) navigator.vibrate(t === 'ok' ? [60, 40, 60] : 15); } catch (e) {} };
+async function call(params) {
+  const q = new URLSearchParams({ ...params, init: INIT });
+  const r = await fetch(API + (API.includes('?') ? '&' : '?') + q.toString());
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'error');
+  return j;
+}
+function setSync(state, text) { const s = $('#sync'); s.className = 'sync ' + state; s.querySelector('span').textContent = text; }
+
+const $ = s => document.querySelector(s);
+const fmt = n => (Math.round(n * 10) / 10).toString().replace('.', ',');
+const ymdOf = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const todayKey = ymdOf(new Date());
+const suggestedFor = ymd => { const [y, m, d] = ymd.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 864e5) % 2 === 0 ? 'rice' : 'buck'; };
+const suggested = suggestedFor(todayKey);
+function load(k, def) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (e) { return def; } }
+function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+let st = load('day-' + todayKey, { date: todayKey, day: suggested, meals: {}, supps: {}, water: 0 });
+let plan = load('plan', { rice: 4, buck: 3 });
+let srv = load('srv', { gymNext: 0, last: {}, history: [], weights: [], verdict: '', lifts: {}, targets: {}, todayLog: {} });
+
+let saveTimer = null;
+function saveDay() {
+  store('day-' + todayKey, st);
+  if (!ONLINE) return;
+  clearTimeout(saveTimer);
+  setSync('', 'сохраняю…');
+  saveTimer = setTimeout(() => call({ api: 'day', data: JSON.stringify(st) }).then(() => setSync('ok', 'в таблице')).catch(() => setSync('err', 'не сохранилось')), 700);
+}
+
+// ---------- tabs ----------
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+function showTab(t) {
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  document.querySelectorAll('.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + t));
+  if (['food', 'gym', 'weight'].includes(t)) { try { history.replaceState(null, '', location.search + '#' + t); } catch (e) {} }
+  window.scrollTo(0, 0); buzz('tap');
+}
+
+// ---------- FOOD ----------
+const NOTE = {
+  egg: g => `${Math.round(g / 50)} шт`,
+  rice: g => g === 125 ? '1 пакетик, сухой' : g === 62.5 ? '½ пакетика, сухой' : `${g / 125} пакетика`,
+  buck: g => g === 100 ? '1 пакетик, сухой' : `${g / 100} пакетика`,
+  prot: () => '1 мерная ложка',
+  banana: g => g <= 110 ? '≈ 1 небольшой' : '≈ 1 крупный',
+  papr: g => g >= 200 ? '≈ 1 крупная' : '≈ ½ крупной',
+  oil: () => 'взвесь на весах'
+};
+function macros(items) { const m = { p: 0, f: 0, c: 0, k: 0 }; items.forEach(([k, g]) => { const F = FOOD[k]; for (const x in m) m[x] += F[x] * g / 100; }); return m; }
+const meals = () => PLAN.days[st.day].meals;
+
+function renderFoodHeader() {
+  $('#today').textContent = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('#sw-rice').setAttribute('aria-pressed', st.day === 'rice');
+  $('#sw-buck').setAttribute('aria-pressed', st.day === 'buck');
+  $('#hint').textContent = st.day === suggested ? 'По очереди сегодня как раз этот день 👌' : 'По очереди сегодня был бы ' + (suggested === 'rice' ? 'рисовый' : 'гречневый') + ', но ты рулишь';
+}
+function renderMeals() {
+  const box = $('#meals'); box.innerHTML = '';
+  meals().forEach(meal => {
+    const m = macros(meal.items), done = !!st.meals[meal.id];
+    const el = document.createElement('article');
+    el.className = 'meal' + (done ? ' done' : ''); el.style.setProperty('--c', 'var(' + meal.col + ')');
+    el.innerHTML = `
+      <div class="meal-head"><div><h3>${meal.t}</h3><div class="when">${meal.w}</div></div><span class="em" aria-hidden="true">${done ? '✅' : '⏳'}</span></div>
+      <div class="chips num"><span class="chip p">Б ${fmt(m.p)}</span><span class="chip f">Ж ${fmt(m.f)}</span><span class="chip c">У ${fmt(m.c)}</span><span class="chip k">${Math.round(m.k)} ккал</span></div>
+      <ul class="items">${meal.items.map(([k, g, box], j) => `${box && box !== (meal.items[j - 1] || [])[2] ? `<li class="box-h">${box}</li>` : ''}<li><span class="em" aria-hidden="true">${FOOD[k].e}</span><span class="what">${FOOD[k].n}${NOTE[k] ? `<small>${NOTE[k](g)}</small>` : ''}</span><span class="g num">${fmt(g)}<small> г</small></span></li>`).join('')}</ul>
+      ${meal.how ? `<div class="how">${meal.how}</div>` : ''}
+      ${meal.pill ? `<div class="pill">${meal.pill}</div>` : ''}
+      <button class="btn${['--m3', '--m5'].includes(meal.col) ? ' light' : ''}">${done ? 'Съедено! Отменить' : 'Съел ✓'}</button>`;
+    el.querySelector('.btn').addEventListener('click', () => {
+      st.meals[meal.id] = !st.meals[meal.id];
+      if (st.meals[meal.id] && meal.supp) String(meal.supp).split(',').forEach(x => { st.supps[x] = true; });
+      saveDay(); renderFood();
+      const all = meals().every(x => st.meals[x.id]);
+      buzz(all && st.meals[meal.id] ? 'ok' : 'tap');
+      if (all && st.meals[meal.id]) confetti();
+    });
+    box.appendChild(el);
+  });
+}
+function renderProgress() {
+  const e = { p: 0, f: 0, c: 0, k: 0 };
+  meals().forEach(meal => { if (st.meals[meal.id]) { const m = macros(meal.items); for (const x in e) e[x] += m[x]; } });
+  const rows = [['p', 'Белки', 'г', '--prot'], ['f', 'Жиры', 'г', '--fat'], ['c', 'Углеводы', 'г', '--carb'], ['k', 'Калории', 'ккал', '--kcal']];
+  $('#bars').innerHTML = rows.map(([k, label, u, col]) => `<div><div class="bar-top"><span>${label}</span><span class="num"><b>${k === 'k' ? Math.round(e[k]) : fmt(e[k])}</b> / ${TARGET[k]} ${u}</span></div><div class="track"><div class="fill" style="width:${Math.min(100, e[k] / TARGET[k] * 100)}%;background:var(${col})"></div></div></div>`).join('');
+  $('#pct').textContent = Math.round(Math.min(100, e.k / TARGET.k * 100)) + '%';
+  $('#dots').innerHTML = meals().map(m => `<span class="dot${st.meals[m.id] ? ' on' : ''}" title="${m.t}"></span>`).join('');
+}
+function renderSupps() {
+  const box = $('#supps'); box.innerHTML = '';
+  PLAN.supps.forEach(s => {
+    const b = document.createElement('button'); b.className = 'chk'; b.setAttribute('aria-pressed', !!st.supps[s.id]);
+    b.innerHTML = `<span class="box">✓</span><span>${s.t}<small>${s.s}</small></span>`;
+    b.addEventListener('click', () => { buzz('tap'); st.supps[s.id] = !st.supps[s.id]; saveDay(); renderSupps(); });
+    box.appendChild(b);
+  });
+}
+function renderWater() {
+  const w = $('#water'); w.innerHTML = '';
+  for (let i = 1; i <= 8; i++) {
+    const g = document.createElement('button'); g.className = 'glass' + (i <= st.water ? ' on' : ''); g.setAttribute('aria-label', 'Стакан ' + i);
+    g.addEventListener('click', () => { buzz('tap'); st.water = st.water === i ? i - 1 : i; saveDay(); renderWater(); if (st.water === 8) confetti(); });
+    w.appendChild(g);
+  }
+  $('#water-n').textContent = st.water;
+}
+function shopping() {
+  const tot = {};
+  ['rice', 'buck'].forEach(t => PLAN.days[t].meals.forEach(m => m.items.forEach(([k, g]) => { tot[k] = (tot[k] || 0) + g * plan[t]; })));
+  const L = [], add = (k, q, s) => { if (tot[k] > 0) L.push({ e: FOOD[k].e, n: FOOD[k].n, q, s }); };
+  add('rice', `${Math.ceil(tot.rice / 125)} пакет.`, `по 125 г · ${fmt(tot.rice)} г`);
+  add('buck', `${Math.ceil(tot.buck / 100)} пакет.`, `по 100 г · ${fmt(tot.buck)} г`);
+  add('chick', `${fmt(tot.chick / 1000)} кг`, `≈ ${Math.ceil(tot.chick / 500)} уп. по 500 г`);
+  add('egg', `${Math.round(tot.egg / 50)} шт`, `≈ ${Math.ceil(tot.egg / 50 / 15)} уп. по 15`);
+  add('oats', `${Math.round(tot.oats)} г`, `≈ ${Math.ceil(tot.oats / 500)} пачк. по 500 г`);
+  add('berr', `${Math.round(tot.berr)} г`, 'замороженный микс');
+  add('banana', `${Math.round(tot.banana)} г`, `≈ ${Math.ceil(tot.banana / 115)} шт`);
+  add('gy', `${Math.round(tot.gy)} г`, 'натуральный, 0–2%');
+  add('tvor', `${Math.round(tot.tvor)} г`, `≈ ${Math.ceil(tot.tvor / 500)} пачк. по 500 г`);
+  add('prot', `${Math.round(tot.prot)} г`, `${plan.rice + plan.buck} мерных ложек`);
+  add('tom', `${fmt(tot.tom / 1000)} кг`, '');
+  add('cuc', `${fmt(tot.cuc / 1000)} кг`, '');
+  add('papr', `${fmt(tot.papr / 1000)} кг`, `≈ ${Math.ceil(tot.papr / 200)} крупных`);
+  add('lett', `${Math.round(tot.lett)} г`, `≈ ${Math.ceil(tot.lett / 180)} кочан.`);
+  add('oil', `${Math.round(tot.oil)} г`, 'масло');
+  return L;
+}
+function renderShop() {
+  $('#n-rice').textContent = plan.rice; $('#n-buck').textContent = plan.buck;
+  $('#shop').innerHTML = shopping().map(x => `<li><span class="em" aria-hidden="true">${x.e}</span><span class="what">${x.n}</span><span class="q num">${x.q}${x.s ? `<small>${x.s}</small>` : ''}</span></li>`).join('');
+}
+document.querySelectorAll('.stepper button').forEach(b => b.addEventListener('click', () => {
+  const t = b.dataset.t; plan[t] = Math.max(0, Math.min(14, plan[t] + Number(b.dataset.d))); store('plan', plan); renderShop(); buzz('tap');
+}));
+$('#copy').addEventListener('click', async () => {
+  const txt = 'Покупки (' + plan.rice + ' рис. + ' + plan.buck + ' греч. дней):\n' + shopping().map(x => `${x.e} ${x.n}: ${x.q}${x.s ? ' (' + x.s + ')' : ''}`).join('\n');
+  try { await navigator.clipboard.writeText(txt); $('#copy').textContent = '✅ Скопировано'; }
+  catch (e) { $('#copy').textContent = 'Не вышло скопировать, выдели список вручную'; }
+  setTimeout(() => $('#copy').textContent = '📋 Скопировать список', 2000);
+});
+$('#sw-rice').addEventListener('click', () => { if (st.day === 'rice') return; st.day = 'rice'; st.meals = {}; saveDay(); renderFood(); buzz('tap'); });
+$('#sw-buck').addEventListener('click', () => { if (st.day === 'buck') return; st.day = 'buck'; st.meals = {}; saveDay(); renderFood(); buzz('tap'); });
+$('#reset').addEventListener('click', () => { st = { date: todayKey, day: st.day, meals: {}, supps: {}, water: 0 }; saveDay(); renderFood(); });
+function renderFood() { renderFoodHeader(); renderMeals(); renderProgress(); renderSupps(); renderWater(); }
+
+// ---------- GYM ----------
+let draft = load('gym-draft', { idx: -1, ex: {} });
+function curIdx() { return (Number(srv.gymNext) || 0) % PROGRAM.length; }
+function restSec(r) {
+  const s = String(r).toLowerCase();
+  const sec = s.match(/^(\d+)\s*сек/); if (sec) return Number(sec[1]);
+  const m = s.match(/^(\d+)(?:[.,](\d{1,2}))?\s*мин/); if (!m) return 90;
+  return Number(m[1]) * 60 + (m[2] ? Number(m[2].padEnd(2, '0')) : 0);
+}
+const mmss = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+function spark(points, w = 240, h = 44) {
+  if (!points || points.length < 2) return '';
+  const v = points.map(p => p.w); const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+  const X = i => 4 + i * (w - 8) / (points.length - 1), Y = x => hi === lo ? h / 2 : h - 6 - (x - lo) * (h - 12) / span;
+  const pts = points.map((p, i) => `${X(i)},${Y(p.w)}`).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polygon points="${X(0)},${h} ${pts} ${X(points.length - 1)},${h}" fill="var(--m3)" opacity=".13"/><polyline points="${pts}" fill="none" stroke="var(--m3)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/><circle cx="${X(points.length - 1)}" cy="${Y(v[v.length - 1])}" r="4" fill="var(--m3)"/></svg>`;
+}
+function deltaBadge(points) {
+  if (!points || points.length < 2) return '';
+  const d = Math.round((points[points.length - 1].w - points[0].w) * 2) / 2;
+  const since = points[0].d.slice(8, 10) + '.' + points[0].d.slice(5, 7);
+  return `<span class="delta ${d > 0 ? 'pos' : d < 0 ? 'neg' : 'zero'} num">${d > 0 ? '+' : d < 0 ? '−' : '±'}${fmt(Math.abs(d))} кг с ${since}</span>`;
+}
+const T_ICON = { up: '🔼', keep: '🎯', down: '🔽', stall: '⚠️', new: '🆕', deload: '🧘' };
+function renderGym() {
+  const i = curIdx(), w = PROGRAM[i];
+  if (draft.idx !== i) {
+    draft = { idx: i, ex: {} };
+    w.ex.forEach((x, k) => { const t = (srv.todayLog || {})[x.n]; if (t) draft.ex[k] = { w: t.w == null ? '' : String(t.w).replace('.', ','), reps: t.reps }; });
+    store('gym-draft', draft);
+  }
+  $('#gym-label').textContent = `${w.label} · ${i + 1} из ${PROGRAM.length} в цикле`;
+  $('#gym-title').textContent = w.title;
+  $('#gym-chips').innerHTML = `<span class="chip ${w.light ? 'c' : 'p'}">${w.tip || (w.light ? 'разгрузка' : 'старайся +1–2,5 кг')}</span><span class="chip ghost">${w.ex.length} упражнений</span>`;
+  const box = $('#exercises'); box.innerHTML = '';
+  w.ex.forEach((x, k) => {
+    const d = draft.ex[k] || {};
+    const last = srv.last && srv.last[x.n];
+    const tg_ = (srv.targets || {})[x.n];
+    const pts = (srv.lifts || {})[x.n];
+    const el = document.createElement('article'); el.className = 'ex' + (d.done ? ' done' : '');
+    el.innerHTML = `
+      <div class="ex-head"><div class="ex-n">${k + 1}</div><div><div class="ex-name">${x.n}</div><div class="ex-sets">${x.s}</div></div><button class="tick" aria-label="Упражнение сделано">✓</button></div>
+      <div class="chips"><span class="chip c">ЗДО ${x.z}</span><span class="chip ghost">отдых ${x.r}</span></div>
+      ${x.c ? `<div class="ex-c">${x.c}</div>` : ''}
+      ${tg_ ? `<div class="target ${tg_.kind}">${T_ICON[tg_.kind] || '🎯'} ${tg_.w != null ? 'Сегодня: ' + fmt(tg_.w) + ' кг' : 'Сегодня'}<small>${tg_.text}</small></div>` : ''}
+      <div class="last${last ? '' : ' none'}">${last ? `В прошлый раз: ${last.w != null ? fmt(last.w) + ' кг' : 'без веса'}${last.reps ? ' · ' + last.reps : ''}` : 'Первый раз — подбери вес по ощущениям'}</div>
+      ${pts && pts.length > 1 ? `<div class="spark">${spark(pts)}${deltaBadge(pts)}</div>` : ''}
+      <div class="inputs">
+        <label>Рабочий вес, кг<input inputmode="decimal" data-f="w" value="${d.w ?? ''}" placeholder="${tg_ && tg_.w != null ? fmt(tg_.w) : last && last.w != null ? fmt(last.w) : 'кг'}"></label>
+        <label>Повторы по подходам<input inputmode="text" data-f="reps" value="${d.reps ?? ''}" placeholder="10, 9, 8"></label>
+      </div>
+      <div class="ex-btns">
+        <button class="btn light" style="--c:var(--m3)" data-act="rest">⏱ Отдых ${mmss(restSec(x.r))}</button>
+        ${x.v ? `<a class="btn dark vid" href="${x.v}" target="_blank" rel="noopener" style="color:var(--bg);margin:0">▶ Техника</a>` : '<span></span>'}
+      </div>`;
+    el.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
+      draft.ex[k] = { ...(draft.ex[k] || {}), [inp.dataset.f]: inp.value }; store('gym-draft', draft);
+    }));
+    el.querySelector('.tick').addEventListener('click', () => {
+      draft.ex[k] = { ...(draft.ex[k] || {}), done: !(draft.ex[k] || {}).done }; store('gym-draft', draft);
+      el.classList.toggle('done', draft.ex[k].done); buzz(draft.ex[k].done ? 'ok' : 'tap'); gymProgress();
+    });
+    el.querySelector('[data-act="rest"]').addEventListener('click', () => startTimer(restSec(x.r), x.n));
+    const v = el.querySelector('a.vid');
+    if (v && tg && tg.openLink) v.addEventListener('click', ev => { ev.preventDefault(); tg.openLink(x.v); });
+    box.appendChild(el);
+  });
+  gymProgress();
+  const L = srv.lifts || {};
+  const names = Object.keys(L).filter(n => L[n].length).sort((a, b) => (L[b].length - L[a].length));
+  $('#gym-prog').innerHTML = names.map(n => { const p = L[n], l = p[p.length - 1];
+    return `<li><div class="pn"><span>${n}</span><span class="num">${fmt(l.w)} кг</span></div>${p.length > 1 ? `<div class="spark">${spark(p, 300, 48)}${deltaBadge(p)}</div>` : '<div class="sub">Одна запись — график появится со второй</div>'}</li>`; }).join('') || '<li><span class="sub">Записывай веса — тут вырастут графики по каждому упражнению</span></li>';
+  $('#gym-hist').innerHTML = (srv.history || []).slice(-6).reverse().map(h => `<li><span>${h.t}</span><span class="num">${h.d.slice(8, 10)}.${h.d.slice(5, 7)}</span></li>`).join('') || '<li><span class="sub">Пока пусто — первая тренировка впереди</span></li>';
+}
+function gymProgress() {
+  const w = PROGRAM[curIdx()];
+  const n = w.ex.filter((_, k) => (draft.ex[k] || {}).done).length;
+  $('#gym-done').textContent = n; $('#gym-total').textContent = w.ex.length;
+  $('#gym-fill').style.width = (n / w.ex.length * 100) + '%';
+}
+$('#gym-finish').addEventListener('click', async () => {
+  const i = curIdx(), w = PROGRAM[i];
+  const sets = w.ex.map((x, k) => { const d = draft.ex[k] || {}; const wt = String(d.w || '').replace(',', '.'); return { n: x.n, w: wt && !isNaN(wt) ? Number(wt) : '', reps: d.reps || '' }; }).filter(s => s.w !== '' || s.reps);
+  const btn = $('#gym-finish'); btn.disabled = true; btn.textContent = 'Записываю…';
+  try {
+    if (ONLINE) {
+      const j = await call({ api: 'gym', data: JSON.stringify({ idx: i, sets }) });
+      applyState(j.data);
+      $('#gym-analysis').textContent = j.analysis || ''; $('#gym-analysis-card').hidden = !j.analysis;
+    }
+    else { sets.forEach(s => { if (s.w !== '') srv.last[s.n] = { w: s.w, reps: s.reps }; }); srv.gymNext = (i + 1) % PROGRAM.length; }
+    if (!ONLINE) srv.history = (srv.history || []).concat([{ d: todayKey, i: i + 1, t: w.title + ' · ' + w.label }]);
+    $('#gym-tip').hidden = true;
+    store('srv', srv); draft = { idx: -1, ex: {} }; store('gym-draft', draft);
+    buzz('ok'); confetti(); renderGym();
+    if (!$('#gym-analysis-card').hidden) $('#gym-analysis-card').scrollIntoView({ behavior: 'smooth', block: 'center' }); else window.scrollTo(0, 0);
+    btn.textContent = '🔥 Записал! Следующая уже тут';
+  } catch (e) { btn.textContent = 'Не сохранилось, жми ещё раз'; }
+  setTimeout(() => { btn.disabled = false; btn.textContent = '✅ Тренировка завершена'; }, 2500);
+});
+$('#gym-skip').addEventListener('click', async () => {
+  try { if (ONLINE) { const j = await call({ api: 'gymskip' }); srv.gymNext = j.next; } else srv.gymNext = (curIdx() + 1) % PROGRAM.length; store('srv', srv); renderGym(); buzz('tap'); } catch (e) {}
+});
+
+$('#gym-tipbtn').addEventListener('click', async () => {
+  const box = $('#gym-tip'), b = $('#gym-tipbtn');
+  if (!ONLINE) { box.hidden = false; box.textContent = 'Совет ИИ работает, когда открываешь приложение из бота.'; return; }
+  b.disabled = true; b.textContent = '🤖 Думаю…';
+  try { const j = await call({ api: 'gymtip' }); box.textContent = j.tip; box.hidden = false; buzz('ok'); }
+  catch (e) { box.hidden = false; box.textContent = 'ИИ сейчас не ответил, попробуй ещё раз.'; }
+  b.disabled = false; b.textContent = '🤖 Совет на сегодня';
+});
+
+// timer
+let tLeft = 0, tTotal = 1, tInt = null;
+function startTimer(sec, name) {
+  tLeft = sec; tTotal = sec; $('#timer-ex').textContent = 'Отдых · ' + name; $('#timer').classList.add('on'); drawTimer(); buzz('tap');
+  clearInterval(tInt); tInt = setInterval(() => { tLeft--; drawTimer(); if (tLeft <= 0) { stopTimer(); buzz('ok'); if (navigator.vibrate) try { navigator.vibrate([200, 100, 200]); } catch (e) {} } }, 1000);
+}
+function drawTimer() { $('#timer-t').textContent = mmss(Math.max(0, tLeft)); $('#ring').setAttribute('stroke-dashoffset', 276.5 * (1 - Math.max(0, tLeft) / tTotal)); }
+function stopTimer() { clearInterval(tInt); $('#timer').classList.remove('on'); }
+$('#t-stop').addEventListener('click', stopTimer);
+$('#t-plus').addEventListener('click', () => { tLeft += 15; tTotal = Math.max(tTotal, tLeft); drawTimer(); });
+$('#t-minus').addEventListener('click', () => { tLeft = Math.max(1, tLeft - 15); drawTimer(); });
+
+// ---------- WEIGHT ----------
+function renderWeight() {
+  const W = srv.weights || [];
+  const last = W[W.length - 1];
+  $('#w-now').textContent = last ? fmt(last.w) + ' кг' : '—';
+  const lw = [...W].reverse().find(x => x.waist);
+  $('#w-waist').textContent = lw ? 'талия ' + fmt(lw.waist) + ' см' : '';
+  if (srv.verdict) $('#w-verdict').textContent = srv.verdict;
+  $('#w-list').innerHTML = W.slice(-8).reverse().map(x => `<li><span class="num">${x.d.slice(8, 10)}.${x.d.slice(5, 7)}</span><span class="num">${fmt(x.w)} кг${x.waist ? ' · ' + fmt(x.waist) + ' см' : ''}</span></li>`).join('') || '<li><span class="sub">Записей пока нет</span></li>';
+  drawChart(W.slice(-16));
+}
+function drawChart(W) {
+  const svg = $('#chart'); const w = 340, h = 170, pl = 34, pr = 10, pt = 12, pb = 24;
+  if (W.length < 2) { svg.innerHTML = `<text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="var(--muted)" font-size="13" font-weight="700">График появится после 2 взвешиваний</text>`; return; }
+  const vals = W.map(x => x.w); let lo = Math.floor(Math.min(...vals) - .5), hi = Math.ceil(Math.max(...vals) + .5);
+  const X = i => pl + i * (w - pl - pr) / (W.length - 1), Y = v => pt + (hi - v) * (h - pt - pb) / (hi - lo);
+  let g = '';
+  for (let v = lo; v <= hi; v += Math.max(1, Math.round((hi - lo) / 4))) g += `<line x1="${pl}" x2="${w - pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${pl - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}</text>`;
+  const pts = W.map((x, i) => `${X(i)},${Y(x.w)}`).join(' ');
+  const area = `${X(0)},${h - pb} ${pts} ${X(W.length - 1)},${h - pb}`;
+  g += `<polygon points="${area}" fill="var(--kcal)" opacity=".12"/><polyline points="${pts}" fill="none" stroke="var(--kcal)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
+  W.forEach((x, i) => { g += `<circle cx="${X(i)}" cy="${Y(x.w)}" r="${i === W.length - 1 ? 5.5 : 3.5}" fill="var(--kcal)"/>`; });
+  [0, W.length - 1].forEach(i => { g += `<text x="${X(i)}" y="${h - 6}" text-anchor="${i ? 'end' : 'start'}" font-size="11" fill="var(--muted)">${W[i].d.slice(8, 10)}.${W[i].d.slice(5, 7)}</text>`; });
+  svg.innerHTML = g;
+}
+$('#wform').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const w = Number(String($('#w-in').value).replace(',', '.')); const waist = String($('#waist-in').value).replace(',', '.');
+  if (!(w >= 30 && w <= 200)) { $('#w-in').focus(); $('#w-verdict').textContent = 'Впиши вес числом, например 64,8'; return; }
+  const btn = ev.submitter || $('#wform button'); btn.textContent = 'Сохраняю…';
+  try {
+    if (ONLINE) { const j = await call({ api: 'weight', w: String(w), waist }); srv.weights = j.weights; srv.verdict = j.verdict; }
+    else { srv.weights = (srv.weights || []).concat([{ d: todayKey, w, waist: waist ? Number(waist) : null }]); }
+    store('srv', srv); $('#w-in').value = ''; $('#waist-in').value = ''; renderWeight(); buzz('ok'); btn.textContent = '✅ Записал';
+  } catch (e) { btn.textContent = 'Не сохранилось, жми ещё раз'; }
+  setTimeout(() => btn.textContent = '💾 Сохранить', 2000);
+});
+
+// ---------- confetti ----------
+function confetti() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const cv = $('#confetti'), ctx = cv.getContext('2d'); cv.width = innerWidth; cv.height = innerHeight;
+  const cols = ['#ff5d73', '#ffb020', '#18b3a4', '#7a5cff', '#3d8bff', '#21c46b'];
+  const P = Array.from({ length: 140 }, () => ({ x: innerWidth / 2, y: innerHeight / 3, vx: (Math.random() - .5) * 14, vy: Math.random() * -12 - 4, s: Math.random() * 7 + 4, c: cols[Math.random() * cols.length | 0], r: Math.random() * 6 }));
+  let t = 0; (function f() { ctx.clearRect(0, 0, cv.width, cv.height);
+    P.forEach(p => { p.vy += .35; p.x += p.vx; p.y += p.vy; p.r += .1; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); ctx.restore(); });
+    if (++t < 120) requestAnimationFrame(f); else ctx.clearRect(0, 0, cv.width, cv.height); })();
+}
+
+function applyState(d) {
+  if (!d) return;
+  srv = { gymNext: d.gymNext, last: d.last || {}, history: d.history || [], weights: d.weights || [], verdict: d.verdict || '',
+    lifts: d.lifts || {}, targets: d.targets || {}, todayLog: d.todayLog || {} };
+  store('srv', srv);
+}
+// ---------- start ----------
+renderFood(); renderShop(); renderGym(); renderWeight();
+const startTab = (location.hash || '').slice(1);
+if (['gym', 'weight'].includes(startTab)) showTab(startTab);
+if (ONLINE) {
+  setSync('', 'загружаю…');
+  call({ api: 'state' }).then(j => {
+    const d = j.data;
+    if (d.today && d.today.date === todayKey) {
+      const remoteHasMarks = Object.keys(d.today.meals || {}).length || Object.keys(d.today.supps || {}).length || d.today.water;
+      if (remoteHasMarks || !load('day-' + todayKey, null)) st = { ...d.today };
+    }
+    applyState(d);
+    store('day-' + todayKey, st);
+    renderFood(); renderGym(); renderWeight(); setSync('ok', 'в таблице');
+  }).catch(e => setSync('err', e.message === 'auth' ? 'не узнал тебя' : 'нет связи'));
+} else setSync('', API ? 'открой из бота' : 'демо, без синхронизации');
+</script>
+</body>
+</html>
